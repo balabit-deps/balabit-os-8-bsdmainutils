@@ -1,0 +1,70 @@
+#!/usr/bin/make -f
+
+SHELL+= -e
+#export DH_VERBOSE=1
+
+include /usr/share/quilt/quilt.make
+
+CFLAGS = `dpkg-buildflags --get CFLAGS`
+CFLAGS += `dpkg-buildflags --get CPPFLAGS`
+LDFLAGS = `dpkg-buildflags --get LDFLAGS`
+export CFLAGS
+export LDFLAGS
+
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+	CROSS += "CC=$(DEB_HOST_GNU_TYPE)-gcc"
+else
+	CROSS +=
+endif
+
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+build-stamp: debian/stamp-patched
+	dh_testdir
+	$(MAKE) $(CROSS)
+	currentyear=$(shell date --date="`dpkg-parsechangelog -S Date`" +%Y); \
+	year=`expr $$currentyear + 5`; \
+	while [ $${year} -ne $${currentyear} ] ; do \
+	    year=`expr $$year - 1`; \
+	    python3 $(CURDIR)/debian/calendarJudaic.py $$year > $(CURDIR)/debian/calendars/calendar.judaic.$$year; \
+	done; \
+	cd $(CURDIR)/debian/calendars; \
+	[ -L calendar.judaic ] || ln -s calendar.judaic.$$year calendar.judaic;
+	touch build-stamp
+
+clean: unpatch
+	dh_testdir
+	$(MAKE) clean
+	-rm -f $(CURDIR)/debian/calendars/calendar.judaic*
+	-rm -f build-stamp
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_installdirs
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/bsdmainutils
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installdocs
+	dh_installchangelogs
+	dh_installcron
+	dh_installinit
+	dh_install
+	dh_strip
+	dh_compress
+	dh_fixperms -Xbsd-write
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_installdeb
+	dh_builddeb
+
+binary-indep:
+
+binary: binary-arch
+
+.PHONY: binary binary-arch binary-indep clean build install
